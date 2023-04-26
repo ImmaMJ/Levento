@@ -1,0 +1,97 @@
+import RPi.GPIO as GPIO
+import time
+
+# Настройка GPIO
+GPIO.setmode(GPIO.BCM)
+
+led_pins = [18, 23, 24] # пины для светодиодов
+dac_pins = [26, 19, 13, 6, 5, 11, 9, 10] # пины для ЦАП
+comp_pin = 17 # пин для компаратора
+triple_pin = 4 # пин для входа тройка-модуля
+
+GPIO.setup(led_pins, GPIO.OUT)
+GPIO.setup(dac_pins, GPIO.OUT)
+GPIO.setup(comp_pin, GPIO.IN)
+GPIO.setup(triple_pin, GPIO.OUT)
+
+# Функция измерения напряжения на выходе тройка-модуля
+def measure_triple():
+    voltage = 0
+    for i in range(8):
+        GPIO.output(dac_pins[i], voltage)
+        voltage += 0.25
+    time.sleep(0.1)
+    value = 0
+    for i in range(8):
+        bit = GPIO.input(comp_pin)
+        value = (value << 1) | bit
+        voltage -= 0.25
+        GPIO.output(dac_pins[i], voltage)
+    return value
+
+# Функция вывода двоичного представления числа в область светодиодов
+def show_binary(value):
+    binary = bin(value)[2:].zfill(3)
+    for i in range(3):
+        if binary[i] == '1':
+            GPIO.output(led_pins[i], GPIO.HIGH)
+        else:
+            GPIO.output(led_pins[i], GPIO.LOW)
+
+try:
+    # Создание пустого списка для добавления новых измерений
+    measurements = []
+
+    # Сохранение момента начала измерений
+    start_time = time.time()
+
+    # Измерения во время заряда конденсатора
+    GPIO.output(triple_pin, GPIO.HIGH)
+    while True:
+        value = measure_triple()
+        measurements.append(value)
+        if value >= 0.97 * 255:
+            break
+
+    # Измерения во время разряда конденсатора
+    GPIO.output(triple_pin, GPIO.LOW)
+    while True:
+        value = measure_triple()
+        measurements.append(value)
+        if value <= 0.02 * 255:
+            break
+
+    # Сохранение момента завершения измерений
+    end_time = time.time()
+
+    # Определение продолжительности эксперимента
+    duration = end_time - start_time
+
+    # Построение графика зависимости показаний АЦП от номера измерения
+    import matplotlib.pyplot as plt
+    plt.plot(measurements)
+    plt.xlabel('Measurement number')
+    plt.ylabel('ADC value')
+    plt.show()
+
+    # Сохранение показаний АЦП в текстовый файл data.txt
+    with open('data.txt', 'w') as f:
+        for value in measurements:
+            f.write(str(value) + '\n')
+
+    # Сохранение средней частоты дискретизации и шага квантования АЦП в текстовый файл settings.txt
+    sampling_rate = len(measurements) / duration
+    quantization_step = 3.3 / 256
+    with open('settings.txt', 'w') as f:
+        f.write('Sampling rate: ' + str(sampling_rate) + '\n')
+        f.write('Quantization step: ' + str(quantization_step) + '\n')
+
+    # Вывод информации в терминал
+    print('Total duration:', duration, 'seconds')
+    print('Sampling period:', duration / len(measurements), 'seconds')
+    print('Sampling rate:', sampling_rate, 'Hz')
+    print('Quantization step:', quantization_step, 'V')
+
+finally:
+    # Сброс настроек GPIO
+    GPIO.cleanup()
