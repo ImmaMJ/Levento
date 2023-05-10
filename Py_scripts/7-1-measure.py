@@ -59,17 +59,30 @@ try:
         print(value)
         if value <= 0.02 * 3.3:
             break
+            
+    end_time = time.time()
 
-
-
+    duration = end_time - start_time
 
     plt.plot(data)
+    plt.xlabel('Measurement number')
+    plt.ylabel('ADC value')
     plt.show()
-
 
     with open('data.txt', 'w') as f:
         for value in data:
             f.write(str(value) + '\n')
+
+    sampling_rate = len(data) / duration
+    quantization_step = 3.3 / 256
+    with open('settings.txt', 'w') as f:
+        f.write('Sampling rate: ' + str(sampling_rate) + '\n')
+        f.write('Quantization step: ' + str(quantization_step) + '\n')
+
+    print('Total duration:', duration, 'seconds')
+    print('Sampling period:', duration / len(measurements), 'seconds')
+    print('Sampling rate:', sampling_rate, 'Hz')
+    print('Quantization step:', quantization_step, 'V')
 
 finally:
     GPIO.cleanup()
